@@ -2,12 +2,44 @@
 """
 MariaDB Advanced Schema & Data Synchronization Script
 
+Author: João Cortez
+Email: jbcortezf@gmail.com
+GitHub: https://github.com/jbcortezf/adjust-mariadb
+
 This script compares two MariaDB databases and allows granular control
 over synchronization of structure and/or data for each table.
+
+Features:
+- Interactive table-by-table selection
+- Detailed structural difference analysis
+- Support for structure-only or structure+data sync
+- Safe SQL generation with preview
+- Comprehensive logging and error handling
 
 Requirements:
 - pymysql or mysql-connector-python
 - databases.ini file with connection parameters
+
+License: MIT License
+Copyright (c) 2025 João Cortez
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 """
 
 import configparser
@@ -51,13 +83,13 @@ class AdvancedDatabaseSyncer:
                 cursorclass=pymysql.cursors.DictCursor
             )
             
-            print("✓ Conectado com sucesso a ambos os bancos de dados")
-            print(f"  - Origem: {self.config.get('DEFAULT', 'database1name')} em {self.config.get('DEFAULT', 'database1ip')}")
-            print(f"  - Destino: {self.config.get('DEFAULT', 'database2name')} em {self.config.get('DEFAULT', 'database2ip')}")
+            print("✓ Successfully connected to both databases")
+            print(f"  - Source: {self.config.get('DEFAULT', 'database1name')} at {self.config.get('DEFAULT', 'database1ip')}")
+            print(f"  - Target: {self.config.get('DEFAULT', 'database2name')} at {self.config.get('DEFAULT', 'database2ip')}")
             return True
             
         except Exception as e:
-            print(f"✗ Erro ao conectar aos bancos de dados: {e}")
+            print(f"✗ Error connecting to databases: {e}")
             return False
     
     def get_database_schema(self, connection, db_name: str = None) -> Dict:
@@ -86,10 +118,10 @@ class AdvancedDatabaseSyncer:
                 current_db = result['current_db'] if result and result['current_db'] else None
                 
                 if not current_db:
-                    print("Nenhum banco de dados selecionado")
+                    print("No database selected")
                     return schema
             
-            print(f"📊 Analisando banco: {current_db}")
+            print(f"📊 Analyzing database: {current_db}")
             
             # Get all tables with their info
             cursor.execute("""
@@ -107,7 +139,7 @@ class AdvancedDatabaseSyncer:
             """, (current_db,))
             
             tables_info = cursor.fetchall()
-            print(f"   Encontradas {len(tables_info)} tabelas")
+            print(f"   Found {len(tables_info)} tables")
             
             for table_info in tables_info:
                 table_name = table_info['TABLE_NAME']
@@ -145,7 +177,7 @@ class AdvancedDatabaseSyncer:
                 cursor.execute(f"SHOW INDEX FROM `{table_name}`")
                 schema['indexes'][table_name] = cursor.fetchall()
                 
-                # Get foreign keys (usando REFERENTIAL_CONSTRAINTS para obter regras)
+                # Get foreign keys (using REFERENTIAL_CONSTRAINTS for rules)
                 try:
                     cursor.execute(f"""
                         SELECT 
@@ -165,8 +197,8 @@ class AdvancedDatabaseSyncer:
                     """, (current_db, table_name))
                     schema['foreign_keys'][table_name] = cursor.fetchall()
                 except Exception as fk_error:
-                    # Fallback para versões mais antigas do MariaDB
-                    print(f"   ⚠️ Aviso: Não foi possível obter foreign keys detalhadas para {table_name}: {fk_error}")
+                    # Fallback for older MariaDB versions
+                    print(f"   ⚠️ Warning: Could not get detailed foreign keys for {table_name}: {fk_error}")
                     cursor.execute(f"""
                         SELECT 
                             CONSTRAINT_NAME,
@@ -183,7 +215,7 @@ class AdvancedDatabaseSyncer:
                     schema['foreign_keys'][table_name] = cursor.fetchall()
                 
         except Exception as e:
-            print(f"Erro ao extrair esquema: {e}")
+            print(f"Error extracting schema: {e}")
             
         finally:
             cursor.close()
@@ -202,9 +234,9 @@ class AdvancedDatabaseSyncer:
         tables1 = set(schema1['tables'].keys())
         tables2 = set(schema2['tables'].keys())
         
-        print(f"\n🔍 Comparação detalhada:")
-        print(f"   Banco origem ({db1_name}): {len(tables1)} tabelas")
-        print(f"   Banco destino ({db2_name}): {len(tables2)} tabelas")
+        print(f"\n🔍 Detailed comparison:")
+        print(f"   Source database ({db1_name}): {len(tables1)} tables")
+        print(f"   Target database ({db2_name}): {len(tables2)} tables")
         
         # New tables (exist in source but not in target)
         differences['new_tables'] = sorted(list(tables1 - tables2))
@@ -214,7 +246,7 @@ class AdvancedDatabaseSyncer:
         
         # Check common tables for modifications
         common_tables = tables1 & tables2
-        print(f"   Tabelas em comum: {len(common_tables)}")
+        print(f"   Common tables: {len(common_tables)}")
         
         for table in sorted(common_tables):
             if self.table_has_differences(table, schema1, schema2):
@@ -222,18 +254,18 @@ class AdvancedDatabaseSyncer:
             else:
                 differences['identical_tables'].append(table)
         
-        print(f"   → Novas: {len(differences['new_tables'])}")
-        print(f"   → Removidas: {len(differences['removed_tables'])}")
-        print(f"   → Modificadas: {len(differences['modified_tables'])}")
-        print(f"   → Idênticas: {len(differences['identical_tables'])}")
+        print(f"   → New: {len(differences['new_tables'])}")
+        print(f"   → Removed: {len(differences['removed_tables'])}")
+        print(f"   → Modified: {len(differences['modified_tables'])}")
+        print(f"   → Identical: {len(differences['identical_tables'])}")
         
         return differences
     
     def table_has_differences(self, table_name: str, schema1: Dict, schema2: Dict) -> bool:
         """Check if a table has structural differences between schemas."""
-        # Debug: vamos ver se há problemas na comparação
+        # Debug: check for issues in comparison
         if table_name not in schema1['columns'] or table_name not in schema2['columns']:
-            print(f"   ⚠️ Tabela {table_name}: dados de colunas ausentes")
+            print(f"   ⚠️ Table {table_name}: column data missing")
             return True
             
         cols1 = {col['COLUMN_NAME']: col for col in schema1['columns'][table_name]}
@@ -247,11 +279,11 @@ class AdvancedDatabaseSyncer:
             new_cols = cols1_names - cols2_names
             removed_cols = cols2_names - cols1_names
             if new_cols or removed_cols:
-                print(f"   🔍 {table_name}: Diferenças nas colunas detectadas")
+                print(f"   🔍 {table_name}: Column differences detected")
                 if new_cols:
-                    print(f"      + Novas: {list(new_cols)[:3]}{'...' if len(new_cols) > 3 else ''}")
+                    print(f"      + New: {list(new_cols)[:3]}{'...' if len(new_cols) > 3 else ''}")
                 if removed_cols:
-                    print(f"      - Removidas: {list(removed_cols)[:3]}{'...' if len(removed_cols) > 3 else ''}")
+                    print(f"      - Removed: {list(removed_cols)[:3]}{'...' if len(removed_cols) > 3 else ''}")
                 return True
         
         # Check for column definition differences
@@ -267,8 +299,8 @@ class AdvancedDatabaseSyncer:
                 different_cols.append(col_name)
         
         if different_cols:
-            print(f"   🔍 {table_name}: Definições diferentes em {len(different_cols)} colunas")
-            print(f"      Colunas: {different_cols[:3]}{'...' if len(different_cols) > 3 else ''}")
+            print(f"   🔍 {table_name}: Different definitions in {len(different_cols)} columns")
+            print(f"      Columns: {different_cols[:3]}{'...' if len(different_cols) > 3 else ''}")
             return True
         
         return False
@@ -276,41 +308,41 @@ class AdvancedDatabaseSyncer:
     def show_analysis_summary(self, differences: Dict, schema1: Dict, schema2: Dict):
         """Display a comprehensive analysis of differences."""
         print("\n" + "="*80)
-        print("ANÁLISE DE DIFERENÇAS ENTRE OS BANCOS DE DADOS")
+        print("DATABASE DIFFERENCES ANALYSIS")
         print("="*80)
         
         if differences['new_tables']:
-            print(f"\n📋 TABELAS NOVAS ({len(differences['new_tables'])} tabelas):")
-            print("   (Existem apenas no banco origem)")
+            print(f"\n📋 NEW TABLES ({len(differences['new_tables'])} tables):")
+            print("   (Exist only in source database)")
             for table in differences['new_tables']:
                 rows = schema1['tables'][table]['rows']
-                print(f"   • {table} ({rows:,} registros)")
+                print(f"   • {table} ({rows:,} records)")
         
         if differences['removed_tables']:
-            print(f"\n🗑️  TABELAS A REMOVER ({len(differences['removed_tables'])} tabelas):")
-            print("   (Existem apenas no banco destino)")
+            print(f"\n🗑️  TABLES TO REMOVE ({len(differences['removed_tables'])} tables):")
+            print("   (Exist only in target database)")
             for table in differences['removed_tables']:
                 rows = schema2['tables'][table]['rows']
-                print(f"   • {table} ({rows:,} registros)")
+                print(f"   • {table} ({rows:,} records)")
         
         if differences['modified_tables']:
-            print(f"\n🔧 TABELAS MODIFICADAS ({len(differences['modified_tables'])} tabelas):")
-            print("   (Diferenças estruturais detectadas)")
+            print(f"\n🔧 MODIFIED TABLES ({len(differences['modified_tables'])} tables):")
+            print("   (Structural differences detected)")
             for table in differences['modified_tables']:
                 rows1 = schema1['tables'][table]['rows']
                 rows2 = schema2['tables'][table]['rows']
-                print(f"   • {table} (origem: {rows1:,} → destino: {rows2:,} registros)")
+                print(f"   • {table} (source: {rows1:,} → target: {rows2:,} records)")
                 
                 # Show specific differences
                 self.show_table_differences(table, schema1, schema2)
         
         if differences['identical_tables']:
-            print(f"\n✅ TABELAS IDÊNTICAS ({len(differences['identical_tables'])} tabelas):")
+            print(f"\n✅ IDENTICAL TABLES ({len(differences['identical_tables'])} tables):")
             for i, table in enumerate(differences['identical_tables']):
                 if i < 10:  # Show first 10
                     print(f"   • {table}")
                 elif i == 10:
-                    print(f"   • ... e mais {len(differences['identical_tables']) - 10} tabelas")
+                    print(f"   • ... and {len(differences['identical_tables']) - 10} more tables")
                     break
     
     def show_table_differences(self, table_name: str, schema1: Dict, schema2: Dict):
@@ -321,12 +353,12 @@ class AdvancedDatabaseSyncer:
         # New columns
         new_cols = set(cols1.keys()) - set(cols2.keys())
         if new_cols:
-            print(f"     → Novas colunas: {', '.join(sorted(new_cols))}")
+            print(f"     → New columns: {', '.join(sorted(new_cols))}")
         
         # Removed columns
         removed_cols = set(cols2.keys()) - set(cols1.keys())
         if removed_cols:
-            print(f"     → Colunas removidas: {', '.join(sorted(removed_cols))}")
+            print(f"     → Removed columns: {', '.join(sorted(removed_cols))}")
         
         # Modified columns
         common_cols = set(cols1.keys()) & set(cols2.keys())
@@ -338,22 +370,22 @@ class AdvancedDatabaseSyncer:
                 modified_cols.append(col_name)
         
         if modified_cols:
-            print(f"     → Colunas modificadas: {', '.join(sorted(modified_cols))}")
+            print(f"     → Modified columns: {', '.join(sorted(modified_cols))}")
     
     def show_detailed_table_differences(self, table_name: str, schema1: Dict, schema2: Dict, is_new_table: bool = False):
         """Show detailed structural differences for a specific table."""
         print(f"\n{'='*60}")
-        print(f"📋 DETALHES DA TABELA: {table_name}")
+        print(f"📋 TABLE DETAILS: {table_name}")
         print(f"{'='*60}")
         
         if is_new_table:
-            print("🆕 TABELA NOVA (não existe no destino)")
+            print("🆕 NEW TABLE (does not exist in target)")
             print(f"   Engine: {schema1['tables'][table_name].get('engine', 'N/A')}")
-            print(f"   Registros: {schema1['tables'][table_name].get('rows', 0):,}")
+            print(f"   Records: {schema1['tables'][table_name].get('rows', 0):,}")
             
             # Show columns structure
             columns = schema1['columns'][table_name]
-            print(f"\n📋 ESTRUTURA ({len(columns)} colunas):")
+            print(f"\n📋 STRUCTURE ({len(columns)} columns):")
             for col in columns[:10]:  # Show first 10 columns
                 nullable = "NULL" if col['IS_NULLABLE'] == 'YES' else "NOT NULL"
                 default = f"DEFAULT {col['COLUMN_DEFAULT']}" if col['COLUMN_DEFAULT'] else ""
@@ -361,7 +393,7 @@ class AdvancedDatabaseSyncer:
                 print(f"   • {col['COLUMN_NAME']}: {col['COLUMN_TYPE']} {nullable} {default} {extra}".strip())
             
             if len(columns) > 10:
-                print(f"   ... e mais {len(columns) - 10} colunas")
+                print(f"   ... and {len(columns) - 10} more columns")
             return
         
         # For existing tables, show detailed differences
@@ -371,12 +403,12 @@ class AdvancedDatabaseSyncer:
         rows1 = schema1['tables'][table_name].get('rows', 0)
         rows2 = schema2['tables'][table_name].get('rows', 0)
         
-        print(f"📊 REGISTROS: Origem {rows1:,} → Destino {rows2:,}")
+        print(f"📊 RECORDS: Source {rows1:,} → Target {rows2:,}")
         
         # New columns (in source but not in target)
         new_cols = set(cols1.keys()) - set(cols2.keys())
         if new_cols:
-            print(f"\n➕ COLUNAS NOVAS ({len(new_cols)}):")
+            print(f"\n➕ NEW COLUMNS ({len(new_cols)}):")
             for col_name in sorted(new_cols):
                 col = cols1[col_name]
                 nullable = "NULL" if col['IS_NULLABLE'] == 'YES' else "NOT NULL"
@@ -387,7 +419,7 @@ class AdvancedDatabaseSyncer:
         # Removed columns (in target but not in source)
         removed_cols = set(cols2.keys()) - set(cols1.keys())
         if removed_cols:
-            print(f"\n➖ COLUNAS REMOVIDAS ({len(removed_cols)}):")
+            print(f"\n➖ REMOVED COLUMNS ({len(removed_cols)}):")
             for col_name in sorted(removed_cols):
                 col = cols2[col_name]
                 print(f"   • {col_name}: {col['COLUMN_TYPE']}")
@@ -403,28 +435,28 @@ class AdvancedDatabaseSyncer:
             differences = []
             
             if col1['COLUMN_TYPE'] != col2['COLUMN_TYPE']:
-                differences.append(f"Tipo: {col2['COLUMN_TYPE']} → {col1['COLUMN_TYPE']}")
+                differences.append(f"Type: {col2['COLUMN_TYPE']} → {col1['COLUMN_TYPE']}")
             
             if col1['IS_NULLABLE'] != col2['IS_NULLABLE']:
                 old_null = "NULL" if col2['IS_NULLABLE'] == 'YES' else "NOT NULL"
                 new_null = "NULL" if col1['IS_NULLABLE'] == 'YES' else "NOT NULL"
-                differences.append(f"Nulável: {old_null} → {new_null}")
+                differences.append(f"Nullable: {old_null} → {new_null}")
             
             if str(col1['COLUMN_DEFAULT']) != str(col2['COLUMN_DEFAULT']):
                 old_default = col2['COLUMN_DEFAULT'] or 'NULL'
                 new_default = col1['COLUMN_DEFAULT'] or 'NULL'
-                differences.append(f"Padrão: {old_default} → {new_default}")
+                differences.append(f"Default: {old_default} → {new_default}")
             
             if col1['EXTRA'] != col2['EXTRA']:
-                old_extra = col2['EXTRA'] or '(nenhum)'
-                new_extra = col1['EXTRA'] or '(nenhum)'
+                old_extra = col2['EXTRA'] or '(none)'
+                new_extra = col1['EXTRA'] or '(none)'
                 differences.append(f"Extra: {old_extra} → {new_extra}")
             
             if differences:
                 modified_cols.append((col_name, differences))
         
         if modified_cols:
-            print(f"\n🔧 COLUNAS MODIFICADAS ({len(modified_cols)}):")
+            print(f"\n🔧 MODIFIED COLUMNS ({len(modified_cols)}):")
             for col_name, differences in modified_cols:
                 print(f"   • {col_name}:")
                 for diff in differences:
@@ -434,7 +466,7 @@ class AdvancedDatabaseSyncer:
         self.show_index_differences(table_name, schema1, schema2)
         
         if not new_cols and not removed_cols and not modified_cols:
-            print("\n✅ Estruturas idênticas (diferença apenas nos dados)")
+            print("\n✅ Identical structures (difference only in data)")
 
     def show_index_differences(self, table_name: str, schema1: Dict, schema2: Dict):
         """Show index differences between tables."""
@@ -461,13 +493,13 @@ class AdvancedDatabaseSyncer:
         removed_indexes = set(idx2_dict.keys()) - set(idx1_dict.keys())
         
         if new_indexes:
-            print(f"\n🔑 NOVOS ÍNDICES ({len(new_indexes)}):")
+            print(f"\n🔑 NEW INDEXES ({len(new_indexes)}):")
             for idx_name in sorted(new_indexes):
                 cols = ', '.join(idx1_dict[idx_name])
                 print(f"   • {idx_name}: ({cols})")
         
         if removed_indexes:
-            print(f"\n🗑️ ÍNDICES REMOVIDOS ({len(removed_indexes)}):")
+            print(f"\n🗑️ REMOVED INDEXES ({len(removed_indexes)}):")
             for idx_name in sorted(removed_indexes):
                 cols = ', '.join(idx2_dict[idx_name])
                 print(f"   • {idx_name}: ({cols})")
@@ -482,19 +514,19 @@ class AdvancedDatabaseSyncer:
         }
         
         print("\n" + "="*80)
-        print("SELEÇÃO INTERATIVA DE SINCRONIZAÇÃO")
+        print("INTERACTIVE SYNCHRONIZATION SELECTION")
         print("="*80)
-        print("Opções:")
-        print("  1 - Apenas estrutura")
-        print("  2 - Estrutura + dados")
-        print("  s - Pular esta tabela")
-        print("  d - Ver detalhes da tabela novamente")
-        print("  q - Sair")
+        print("Options:")
+        print("  1 - Structure only")
+        print("  2 - Structure + data")
+        print("  s - Skip this table")
+        print("  d - View table details again")
+        print("  q - Quit")
         
         # Handle new tables
         if differences['new_tables']:
             print(f"\n{'='*80}")
-            print(f"📋 TABELAS NOVAS ({len(differences['new_tables'])} tabelas)")
+            print(f"📋 NEW TABLES ({len(differences['new_tables'])} tables)")
             print("="*80)
             
             for i, table in enumerate(differences['new_tables']):
@@ -504,34 +536,34 @@ class AdvancedDatabaseSyncer:
                 self.show_detailed_table_differences(table, schema1, schema2, is_new_table=True)
                 
                 while True:
-                    print(f"\n🤔 O que fazer com a tabela '{table}'?")
-                    choice = input(f"   Escolha (1/2/s/d): ").strip().lower()
+                    print(f"\n🤔 What to do with table '{table}'?")
+                    choice = input(f"   Choose (1/2/s/d): ").strip().lower()
                     
                     if choice == '1':
                         selections['structure_only'].append(table)
-                        print(f"    ✅ {table}: Apenas estrutura")
+                        print(f"    ✅ {table}: Structure only")
                         break
                     elif choice == '2':
                         selections['structure_and_data'].append(table)
-                        print(f"    ✅ {table}: Estrutura + dados ({rows:,} registros)")
+                        print(f"    ✅ {table}: Structure + data ({rows:,} records)")
                         break
                     elif choice == 's':
                         selections['skip'].append(table)
-                        print(f"    ⏭️ {table}: Pulado")
+                        print(f"    ⏭️ {table}: Skipped")
                         break
                     elif choice == 'd':
                         self.show_detailed_table_differences(table, schema1, schema2, is_new_table=True)
                         continue
                     elif choice == 'q':
-                        print("❌ Operação cancelada pelo usuário.")
+                        print("❌ Operation cancelled by user.")
                         return {}
                     else:
-                        print("    ❌ Escolha inválida. Use 1, 2, s, d, ou q")
+                        print("    ❌ Invalid choice. Use 1, 2, s, d, or q")
         
         # Handle modified tables
         if differences['modified_tables']:
             print(f"\n{'='*80}")
-            print(f"🔧 TABELAS MODIFICADAS ({len(differences['modified_tables'])} tabelas)")
+            print(f"🔧 MODIFIED TABLES ({len(differences['modified_tables'])} tables)")
             print("="*80)
             
             for table in differences['modified_tables']:
@@ -541,63 +573,63 @@ class AdvancedDatabaseSyncer:
                 self.show_detailed_table_differences(table, schema1, schema2, is_new_table=False)
                 
                 while True:
-                    print(f"\n🤔 O que fazer com a tabela '{table}'?")
-                    choice = input(f"   Escolha (1/2/s/d): ").strip().lower()
+                    print(f"\n🤔 What to do with table '{table}'?")
+                    choice = input(f"   Choose (1/2/s/d): ").strip().lower()
                     
                     if choice == '1':
                         selections['structure_only'].append(table)
-                        print(f"    ✅ {table}: Apenas estrutura")
+                        print(f"    ✅ {table}: Structure only")
                         break
                     elif choice == '2':
                         selections['structure_and_data'].append(table)
-                        print(f"    ✅ {table}: Estrutura + dados ({rows1:,} registros)")
+                        print(f"    ✅ {table}: Structure + data ({rows1:,} records)")
                         break
                     elif choice == 's':
                         selections['skip'].append(table)
-                        print(f"    ⏭️ {table}: Pulado")
+                        print(f"    ⏭️ {table}: Skipped")
                         break
                     elif choice == 'd':
                         self.show_detailed_table_differences(table, schema1, schema2, is_new_table=False)
                         continue
                     elif choice == 'q':
-                        print("❌ Operação cancelada pelo usuário.")
+                        print("❌ Operation cancelled by user.")
                         return {}
                     else:
-                        print("    ❌ Escolha inválida. Use 1, 2, s, d, ou q")
+                        print("    ❌ Invalid choice. Use 1, 2, s, d, or q")
         
         # Handle tables to remove
         if differences['removed_tables']:
             print(f"\n{'='*80}")
-            print(f"🗑️ TABELAS PARA REMOÇÃO ({len(differences['removed_tables'])} tabelas)")
+            print(f"🗑️ TABLES FOR REMOVAL ({len(differences['removed_tables'])} tables)")
             print("="*80)
-            print("⚠️  Estas tabelas existem apenas no destino:")
+            print("⚠️  These tables exist only in target:")
             
             for table in differences['removed_tables']:
                 rows = schema2['tables'][table]['rows']
-                print(f"\n📋 Tabela: {table} ({rows:,} registros)")
+                print(f"\n📋 Table: {table} ({rows:,} records)")
                 
                 # Show some details about the table to be removed
                 if table in schema2['columns']:
                     cols_count = len(schema2['columns'][table])
-                    print(f"   • {cols_count} colunas")
+                    print(f"   • {cols_count} columns")
                     if cols_count <= 5:
                         for col in schema2['columns'][table]:
                             print(f"   • {col['COLUMN_NAME']}: {col['COLUMN_TYPE']}")
                 
                 while True:
-                    choice = input(f"\n   🗑️ Remover tabela '{table}'? (y/n/q): ").strip().lower()
-                    if choice in ('y', 'yes', 'sim', 's'):
+                    choice = input(f"\n   🗑️ Remove table '{table}'? (y/n/q): ").strip().lower()
+                    if choice in ('y', 'yes'):
                         selections['drop_tables'].append(table)
-                        print(f"    ✅ {table}: Será removida")
+                        print(f"    ✅ {table}: Will be removed")
                         break
-                    elif choice in ('n', 'no', 'não'):
-                        print(f"    ⏭️ {table}: Mantida")
+                    elif choice in ('n', 'no'):
+                        print(f"    ⏭️ {table}: Kept")
                         break
                     elif choice == 'q':
-                        print("❌ Operação cancelada pelo usuário.")
+                        print("❌ Operation cancelled by user.")
                         return {}
                     else:
-                        print("    ❌ Escolha inválida. Use y/n/q")
+                        print("    ❌ Invalid choice. Use y/n/q")
         
         return selections
     
@@ -606,9 +638,12 @@ class AdvancedDatabaseSyncer:
         sql_statements = []
         
         # Database setup
-        sql_statements.append(f"-- Script de Sincronização de Estrutura")
-        sql_statements.append(f"-- Gerado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        sql_statements.append(f"-- Origem: {db1_name} → Destino: {db2_name}")
+        sql_statements.append(f"-- Structure Synchronization Script")
+        sql_statements.append(f"-- Generated by: MariaDB Advanced Database Synchronizer")
+        sql_statements.append(f"-- Author: João Cortez (jbcortezf@gmail.com)")
+        sql_statements.append(f"-- GitHub: https://github.com/jbcortezf/adjust-mariadb")
+        sql_statements.append(f"-- Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        sql_statements.append(f"-- Source: {db1_name} → Target: {db2_name}")
         sql_statements.append("")
         sql_statements.append(f"USE `{db2_name}`;")
         sql_statements.append("SET FOREIGN_KEY_CHECKS = 0;")
@@ -616,7 +651,7 @@ class AdvancedDatabaseSyncer:
         
         # Drop tables
         for table in selections['drop_tables']:
-            sql_statements.append(f"-- Removendo tabela {table}")
+            sql_statements.append(f"-- Removing table {table}")
             sql_statements.append(f"DROP TABLE IF EXISTS `{table}`;")
             sql_statements.append("")
         
@@ -626,11 +661,11 @@ class AdvancedDatabaseSyncer:
         
         for table in tables_to_create:
             if table not in schema2['tables']:  # New table
-                sql_statements.append(f"-- Criando tabela {table}")
+                sql_statements.append(f"-- Creating table {table}")
                 sql_statements.append(f"{schema1['tables'][table]['create_statement']};")
                 sql_statements.append("")
             else:  # Modified table
-                sql_statements.append(f"-- Modificando estrutura da tabela {table}")
+                sql_statements.append(f"-- Modifying table structure {table}")
                 modifications = self.generate_table_modifications(table, schema1, schema2)
                 sql_statements.extend(modifications)
                 sql_statements.append("")
@@ -687,8 +722,11 @@ class AdvancedDatabaseSyncer:
             return []
         
         sql_statements = []
-        sql_statements.append(f"-- Script de Sincronização de Dados")
-        sql_statements.append(f"-- Gerado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        sql_statements.append(f"-- Data Synchronization Script")
+        sql_statements.append(f"-- Generated by: MariaDB Advanced Database Synchronizer")
+        sql_statements.append(f"-- Author: João Cortez (jbcortezf@gmail.com)")
+        sql_statements.append(f"-- GitHub: https://github.com/jbcortezf/adjust-mariadb")
+        sql_statements.append(f"-- Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         sql_statements.append("")
         sql_statements.append(f"USE `{db2_name}`;")
         sql_statements.append("SET FOREIGN_KEY_CHECKS = 0;")
@@ -703,7 +741,7 @@ class AdvancedDatabaseSyncer:
                 if table in schema1['tables']:
                     rows_count = schema1['tables'][table]['rows']
                     
-                    sql_statements.append(f"-- Sincronizando dados da tabela {table} ({rows_count:,} registros)")
+                    sql_statements.append(f"-- Synchronizing data for table {table} ({rows_count:,} records)")
                     sql_statements.append(f"TRUNCATE TABLE `{table}`;")
                     
                     # Get column names for INSERT
@@ -716,8 +754,8 @@ class AdvancedDatabaseSyncer:
                         
                         # Note: In a real implementation, you'd want to stream the data
                         # This is a simplified version
-                        sql_statements.append(f"-- ATENÇÃO: Dados da tabela {table} devem ser exportados separadamente")
-                        sql_statements.append(f"-- devido ao grande volume ({rows_count:,} registros)")
+                        sql_statements.append(f"-- WARNING: Data for table {table} must be exported separately")
+                        sql_statements.append(f"-- due to large volume ({rows_count:,} records)")
                         
                         # Get database connection info from config for mysqldump command
                         db1_host = self.config.get('DEFAULT', 'database1ip')
@@ -737,26 +775,26 @@ class AdvancedDatabaseSyncer:
     def show_selection_summary(self, selections: Dict):
         """Show summary of user selections."""
         print("\n" + "="*80)
-        print("RESUMO DAS SELEÇÕES")
+        print("SELECTION SUMMARY")
         print("="*80)
         
         if selections['structure_only']:
-            print(f"\n🔧 APENAS ESTRUTURA ({len(selections['structure_only'])} tabelas):")
+            print(f"\n🔧 STRUCTURE ONLY ({len(selections['structure_only'])} tables):")
             for table in selections['structure_only']:
                 print(f"   • {table}")
         
         if selections['structure_and_data']:
-            print(f"\n📊 ESTRUTURA + DADOS ({len(selections['structure_and_data'])} tabelas):")
+            print(f"\n📊 STRUCTURE + DATA ({len(selections['structure_and_data'])} tables):")
             for table in selections['structure_and_data']:
                 print(f"   • {table}")
         
         if selections['drop_tables']:
-            print(f"\n🗑️  TABELAS A REMOVER ({len(selections['drop_tables'])} tabelas):")
+            print(f"\n🗑️  TABLES TO REMOVE ({len(selections['drop_tables'])} tables):")
             for table in selections['drop_tables']:
                 print(f"   • {table}")
         
         if selections['skip']:
-            print(f"\n⏭️  TABELAS PULADAS ({len(selections['skip'])} tabelas):")
+            print(f"\n⏭️  SKIPPED TABLES ({len(selections['skip'])} tables):")
             for table in selections['skip']:
                 print(f"   • {table}")
     
@@ -767,23 +805,23 @@ class AdvancedDatabaseSyncer:
             
             # Execute structure changes
             if self.structure_sql:
-                print("\n🔧 Aplicando mudanças estruturais...")
+                print("\n🔧 Applying structural changes...")
                 for i, statement in enumerate(self.structure_sql):
                     if statement.strip() and not statement.strip().startswith('--'):
                         try:
                             cursor.execute(statement)
                             if i % 10 == 0:  # Show progress every 10 statements
-                                print(f"   Executado {i+1}/{len(self.structure_sql)} comandos...")
+                                print(f"   Executed {i+1}/{len(self.structure_sql)} commands...")
                         except Exception as e:
-                            print(f"   ⚠️  Erro em: {statement[:50]}... - {e}")
+                            print(f"   ⚠️  Error in: {statement[:50]}... - {e}")
                 
                 self.db2_conn.commit()
-                print("   ✓ Mudanças estruturais aplicadas com sucesso!")
+                print("   ✓ Structural changes applied successfully!")
             
             return True
             
         except Exception as e:
-            print(f"✗ Erro durante a sincronização: {e}")
+            print(f"✗ Error during synchronization: {e}")
             self.db2_conn.rollback()
             return False
         finally:
@@ -796,14 +834,14 @@ class AdvancedDatabaseSyncer:
             with open(structure_file, 'w', encoding='utf-8') as f:
                 for statement in self.structure_sql:
                     f.write(statement + '\n')
-            print(f"✓ SQL de estrutura salvo em: {structure_file}")
+            print(f"✓ Structure SQL saved to: {structure_file}")
         
         if self.data_sql:
             data_file = f"{base_filename}_data.sql"
             with open(data_file, 'w', encoding='utf-8') as f:
                 for statement in self.data_sql:
                     f.write(statement + '\n')
-            print(f"✓ SQL de dados salvo em: {data_file}")
+            print(f"✓ Data SQL saved to: {data_file}")
     
     def close_connections(self):
         """Close database connections."""
@@ -815,7 +853,9 @@ class AdvancedDatabaseSyncer:
 def main():
     """Main function."""
     print("="*80)
-    print("SINCRONIZADOR AVANÇADO DE BANCOS DE DADOS MARIADB")
+    print("MARIADB ADVANCED DATABASE SYNCHRONIZER")
+    print("Author: João Cortez | Email: jbcortezf@gmail.com")
+    print("GitHub: https://github.com/jbcortezf/adjust-mariadb")
     print("="*80)
     
     syncer = AdvancedDatabaseSyncer()
@@ -828,7 +868,7 @@ def main():
         db1_name = syncer.config.get('DEFAULT', 'database1name')
         db2_name = syncer.config.get('DEFAULT', 'database2name')
         
-        print(f"\n🔍 Analisando diferenças entre '{db1_name}' e '{db2_name}'...")
+        print(f"\n🔍 Analyzing differences between '{db1_name}' and '{db2_name}'...")
         
         # Get schemas (databases are already selected during connection)
         schema1 = syncer.get_database_schema(syncer.db1_conn)
@@ -846,15 +886,15 @@ def main():
                         len(differences['removed_tables']))
         
         if total_changes == 0:
-            print("\n✅ Os bancos de dados já estão sincronizados!")
+            print("\n✅ Databases are already synchronized!")
             return
         
         # Interactive selection
-        print(f"\n📋 Total de {total_changes} diferenças encontradas.")
-        proceed = input("\nDeseja prosseguir com a seleção interativa? (s/n): ").strip().lower()
+        print(f"\n📋 Total of {total_changes} differences found.")
+        proceed = input("\nProceed with interactive selection? (y/n): ").strip().lower()
         
-        if proceed not in ('s', 'sim', 'y', 'yes'):
-            print("Operação cancelada.")
+        if proceed not in ('y', 'yes'):
+            print("Operation cancelled.")
             return
         
         selections = syncer.interactive_selection(differences, schema1, schema2)
@@ -866,52 +906,52 @@ def main():
         syncer.show_selection_summary(selections)
         
         # Generate SQL
-        print("\n🔨 Gerando comandos SQL...")
+        print("\n🔨 Generating SQL commands...")
         syncer.structure_sql = syncer.generate_structure_sql(selections, schema1, schema2, db1_name, db2_name)
         syncer.data_sql = syncer.generate_data_sql(selections, schema1, db1_name, db2_name)
         
         # Save SQL files
-        save_files = input("\nSalvar arquivos SQL? (s/n) [s]: ").strip().lower()
-        if save_files in ('', 's', 'sim', 'y', 'yes'):
-            filename = input("Nome base dos arquivos [sync_database]: ").strip()
+        save_files = input("\nSave SQL files? (y/n) [y]: ").strip().lower()
+        if save_files in ('', 'y', 'yes'):
+            filename = input("Base filename [sync_database]: ").strip()
             if not filename:
                 filename = 'sync_database'
             syncer.save_sql_files(filename)
         
         # Show preview of structure SQL
         if syncer.structure_sql:
-            print(f"\n📝 Preview do SQL de estrutura ({len(syncer.structure_sql)} comandos):")
+            print(f"\n📝 Structure SQL preview ({len(syncer.structure_sql)} commands):")
             print("-" * 60)
             for i, stmt in enumerate(syncer.structure_sql[:10]):
                 print(stmt)
             if len(syncer.structure_sql) > 10:
-                print(f"... e mais {len(syncer.structure_sql) - 10} comandos")
+                print(f"... and {len(syncer.structure_sql) - 10} more commands")
         
         # Ask to apply changes
-        apply_changes = input(f"\nAplicar mudanças no banco '{db2_name}'? (s/n) [n]: ").strip().lower()
+        apply_changes = input(f"\nApply changes to database '{db2_name}'? (y/n) [n]: ").strip().lower()
         
-        if apply_changes in ('s', 'sim', 'y', 'yes'):
+        if apply_changes in ('y', 'yes'):
             if syncer.execute_sync(db2_name):
-                print(f"\n✅ Sincronização concluída com sucesso!")
+                print(f"\n✅ Synchronization completed successfully!")
                 
                 if syncer.data_sql:
-                    print("\n⚠️  ATENÇÃO: Para tabelas com dados, você precisa executar")
-                    print("   os comandos de sincronização de dados separadamente.")
-                    print("   Verifique o arquivo *_data.sql gerado.")
+                    print("\n⚠️  WARNING: For tables with data, you need to execute")
+                    print("   the data synchronization commands separately.")
+                    print("   Check the generated *_data.sql file.")
             else:
-                print(f"\n❌ Falha na sincronização.")
+                print(f"\n❌ Synchronization failed.")
         else:
-            print("\n📋 Mudanças não aplicadas. Arquivos SQL foram gerados para revisão manual.")
+            print("\n📋 Changes not applied. SQL files were generated for manual review.")
     
     except KeyboardInterrupt:
-        print("\n\n⚠️  Operação cancelada pelo usuário.")
+        print("\n\n⚠️  Operation cancelled by user.")
     except Exception as e:
-        print(f"\n❌ Erro durante a execução: {e}")
+        print(f"\n❌ Error during execution: {e}")
         import traceback
         traceback.print_exc()
     finally:
         syncer.close_connections()
-        print("\n👋 Conexões fechadas. Até logo!")
+        print("\n👋 Connections closed. Goodbye!")
 
 if __name__ == "__main__":
     main()
